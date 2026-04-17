@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Writing — Akhlas</title>
+<meta name="description" content="Essays and notes by Akhlas on the web, tracking, and building product." />
+<meta name="color-scheme" content="light dark" />
+<link rel="stylesheet" href="/assets/style.css" />
+</head>
+<body>
+<header class="nav">
+  <a class="mark" href="/" aria-label="Home">akhlas</a>
+  <nav>
+    <a href="/blog.html" aria-current="page">Writing</a>
+    <a href="https://github.com/akhlas17" rel="noopener">GitHub</a>
+  </nav>
+</header>
+
+<main class="archive">
+  <header class="archive-head">
+    <h1>Writing</h1>
+    <p class="lede">Notes from the build &mdash; short, honest, occasionally useful.</p>
+  </header>
+
+  <ul class="post-list full" id="post-list"></ul>
+</main>
+
+<footer class="foot">
+  <span>&copy; <span id="year"></span> Akhlas</span>
+  <span>Built plain. No frameworks.</span>
+</footer>
+
+<script src="/assets/posts.js" defer></script>
+<script>document.getElementById('year').textContent=new Date().getFullYear()</script>
+</body>
+</html>

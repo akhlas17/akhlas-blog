@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Akhlas — Full-stack developer</title>
+<meta name="description" content="Akhlas. Full-stack developer. Writing about the web, tracking, and the messy edges of shipping product." />
+<meta name="color-scheme" content="light dark" />
+<link rel="stylesheet" href="/assets/style.css" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='black'/%3E%3Ctext x='50%25' y='56%25' text-anchor='middle' fill='white' font-family='ui-sans-serif,system-ui,sans-serif' font-size='18' font-weight='700'%3EA%3C/text%3E%3C/svg%3E" />
+</head>
+<body>
+<header class="nav">
+  <a class="mark" href="/" aria-label="Home">akhlas</a>
+  <nav>
+    <a href="/blog.html">Writing</a>
+    <a href="https://github.com/akhlas17" rel="noopener">GitHub</a>
+  </nav>
+</header>
+
+<main class="home">
+  <section class="hero">
+    <p class="eyebrow">Hi, I'm Akhlas.</p>
+    <h1>A full-stack developer shipping ambitious things on the web.</h1>
+    <p class="lede">I build products, pick them apart, and write about what I find. Currently poking at ad tech, tracking, and the quiet ways the internet decides what you see.</p>
+    <p class="cta">
+      <a href="/blog.html" class="btn">Read the writing &rarr;</a>
+    </p>
+  </section>
+
+  <section class="latest">
+    <h2>Latest</h2>
+    <ul class="post-list" id="post-list">
+      <!-- populated by js/posts.js -->
+    </ul>
+  </section>
+</main>
+
+<footer class="foot">
+  <span>&copy; <span id="year"></span> Akhlas</span>
+  <span>Built plain. No frameworks.</span>
+</footer>
+
+<script src="/assets/posts.js" defer></script>
+<script>document.getElementById('year').textContent=new Date().getFullYear()</script>
+</body>
+</html>
