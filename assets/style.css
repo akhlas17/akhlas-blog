@@ -119,6 +119,46 @@ main { max-width: 72rem; margin-inline: auto; padding-block: 2rem 4rem; }
 }
 .btn:hover { background: var(--ink); color: var(--bg); }
 
+.tags {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 2rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: .4rem .5rem;
+}
+.tags li {
+  font-size: .8rem;
+  letter-spacing: .02em;
+  color: var(--muted);
+  border: 1px solid var(--rule);
+  padding: .3rem .6rem;
+  border-radius: 999px;
+}
+
+.principles {
+  border-top: 1px solid var(--rule);
+  padding: 2rem 0;
+  display: grid;
+  gap: .4rem;
+  max-width: 46rem;
+}
+.principles p {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 2.5rem 1fr;
+  gap: .75rem;
+  color: var(--ink);
+  font-size: 1rem;
+}
+.principles .n {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  font-size: .8rem;
+  letter-spacing: .08em;
+  padding-top: .18rem;
+}
+
 .latest { margin-top: 2rem; border-top: 1px solid var(--rule); padding-top: 2rem; }
 .latest h2, .archive-head h1 {
   font-family: var(--font-sans);
