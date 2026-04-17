@@ -1,15 +1,6 @@
 // Single source of truth for the post index.
 // Add new posts to the top of this array.
-const POSTS = [
-  {
-    slug: "meta-health-faq-nobody-writes",
-    title: "The Meta health FAQ nobody writes",
-    date: "2026-04-17",
-    dateLabel: "Apr 17, 2026",
-    dek: "Twelve questions from health brand owners, with the answers their ad rep won't give them.",
-    href: "/posts/meta-health-faq-nobody-writes.html"
-  }
-];
+const POSTS = [];
 
 (function render() {
   const list = document.getElementById("post-list");
