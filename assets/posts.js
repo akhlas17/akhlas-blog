@@ -2,12 +2,12 @@
 // Add new posts to the top of this array.
 const POSTS = [
   {
-    slug: "meta-health-tracking-field-guide",
-    title: "The Meta health tracking field guide",
+    slug: "meta-classifies-funnels-not-domains",
+    title: "Meta isn't classifying your domain. It's classifying your funnel.",
     date: "2026-04-17",
     dateLabel: "Apr 17, 2026",
-    dek: "What the docs won't tell you, the popular playbooks have wrong, and your ad rep won't admit.",
-    href: "/posts/meta-health-tracking-field-guide.html"
+    dek: "After watching dozens of health brands get restricted, the same pattern keeps showing up — and it isn't where anyone's looking.",
+    href: "/posts/meta-classifies-funnels-not-domains.html"
   }
 ];
 

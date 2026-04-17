@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Meta isn't classifying your domain. It's classifying your funnel. — Akhlas</title>
+<meta name="description" content="After watching dozens of health brands get restricted, the same pattern keeps showing up — and it isn't where anyone's looking." />
+<meta name="color-scheme" content="light dark" />
+<link rel="stylesheet" href="/assets/style.css" />
+</head>
+<body>
+<header class="nav">
+  <a class="mark" href="/" aria-label="Home">akhlas</a>
+  <nav>
+    <a href="/blog.html">Writing</a>
+  </nav>
+</header>
+
+<main>
+  <article class="article">
+    <p class="kicker">Essay &middot; Meta tracking &middot; Health brands</p>
+    <h1>Meta isn't classifying your domain. It's classifying your funnel.</h1>
+    <p class="meta"><time datetime="2026-04-17">April 17, 2026</time> &nbsp;&middot;&nbsp; 9 min read</p>
+
+    <div class="prose" id="prose">
+      <p>Almost every health brand owner I talk to is debugging the wrong layer.</p>
+      <p>They show me their pixel setup. Their CAPI events. Their domain verification. Their renamed events. Their fresh business manager. They've done everything the playbooks say. And they're still restricted, or about to be, or restricted again three weeks after switching domains.</p>
+      <p>The reason isn't that they're missing a step. It's that the model in their head is wrong.</p>
+      <h2>The wrong question everyone asks</h2>
+
+      <p>The question I get most often is some version of: <em>&ldquo;How do I keep my domain from getting flagged?&rdquo;</em> It's the wrong question. It assumes Meta's restriction system is a domain-level filter &mdash; a list of bad URLs Meta keeps somewhere and your job is to stay off it.</p>
+
+      <p>If that were true, the standard playbook would work. Rotate to a fresh domain. Rename your events. Move to CAPI. Done. Brands try this every week. The runway they buy is real but short, the fixes don't compound, and the same restriction keeps coming back. That's the symptom of a wrong model, not bad execution.</p>
+
+      <p>Here's the model that actually fits the behavior I see.</p>
+
+      <h2>The thesis</h2>
+
+      <p>Meta is not classifying your domain. It is classifying the path a user takes from the moment they see your ad to the moment a conversion event fires &mdash; the creative, the click, the landing surface, the scroll depth, the form fields, the next page, the payload, the destination. The whole graph.</p>
+
+      <p>Your domain is one node in that graph. A loud one, but just one. When teams treat &ldquo;domain&rdquo; and &ldquo;classification target&rdquo; as the same thing, every workaround they design touches a single node and leaves the graph intact. So the graph re-classifies the new domain on the old funnel within weeks. Predictably.</p>
+
+      <p>Once you see the funnel as the unit of classification, almost every confusing thing about Meta's enforcement starts making sense.</p>
+
+      <h2>What the funnel-graph model explains</h2>
+
+      <h3>Why renaming events doesn't save you</h3>
+
+      <p>If classification were just a string match on event names, renaming would work. It doesn't, because the renamed event still fires on the same landing page, from the same source URL, with the same product fields, on the same business manager's dataset. The graph around the event hasn't changed. The classifier reads the graph. The rename changes one label on one node.</p>
+
+      <h3>Why subdomains usually inherit</h3>
+
+      <p>The DNS argument says <code>shop.brand.com</code> is a separate hostname. The graph argument says it's the same funnel: same brand, same product catalog, same conversion intent, same downstream pages, often the same pixel and ad account. From Meta's perspective, the subdomain is a different label on a node already inside a flagged subgraph. So it inherits.</p>
+
+      <h3>Why fresh domains expire</h3>
+
+      <p>A fresh domain replaces one node. If the rest of the graph &mdash; landing copy, product names, payload structure, ad account, creative themes, conversion surface &mdash; is unchanged, the classifier rebuilds the same picture in weeks. The fresh domain wasn't a fix. It was a delay.</p>
+
+      <h3>Why bridge pages have to be real</h3>
+
+      <p>A bridge that exists only to redirect into a flagged transactional page <em>adds a node to the same graph</em>. The classifier follows the redirect, reads the destination, and ties the bridge to it. A bridge that has independent organic traffic, its own pages, its own non-ad reason to exist, sits in a different subgraph &mdash; one Meta has actual reasons to consider distinct.</p>
+
+      <h3>Why your competitor seems untouchable</h3>
+
+      <p>Their funnel graph has a different shape. Older account history. A landing surface that wasn't built around your category's vocabulary. A payload that never sent condition-language. A conversion path that branches through neutral surfaces before transacting. They aren't getting away with the same offer &mdash; they're running a structurally different graph that happens to sell the same thing.</p>
+
+      <h3>Why the classifier reads your funnel even when half of it is server-side</h3>
+
+      <p>People assume that moving to CAPI hides intent. It doesn't. Meta still reads the <code>event_source_url</code>, the page that triggered the event, the catalog that's referenced, and the historical pattern of what your dataset has been describing. Server transport changed who shipped the request. It didn't change what the request describes. The graph is intact.</p>
+
+      <h2>What changes once you accept it</h2>
+
+      <p>If the classifier reads your funnel, the unit of work shifts. You stop hardening individual nodes and start designing graphs that are genuinely separable. Five things change about how you build:</p>
+
+      <h3>1. Funnels become first-class assets, not URLs</h3>
+
+      <p>Most teams treat &ldquo;the site&rdquo; as the asset. The asset Meta cares about is the path. So the asset you should care about is the path. That means each meaningful funnel gets its own architecture document: the creative theme it accepts, the landing surface it lives on, the event contract it fires, the conversion surface it terminates at, the account it ships from. If two of your funnels share more than two of those, they're the same graph in Meta's eyes &mdash; and they will rise and fall together.</p>
+
+      <h3>2. The event payload becomes a contract, enforced server-side</h3>
+
+      <p>Every funnel needs a written allow-list of what its events can carry: which event names, which content fields, which URL parameters, which catalog references. Server-side CAPI is the place to enforce it. Not because CAPI hides intent &mdash; it doesn't &mdash; but because it gives you one place to strip, normalize, and validate before payloads leave your perimeter. If your contract permits a query parameter that names a condition, the contract is the leak, not the platform.</p>
+
+      <h3>3. Landing surface design moves upstream of tracking</h3>
+
+      <p>Classification follows content. So content has to be designed before tracking is even installed. The order most teams use &mdash; ship the page, install the pixel, debug restriction &mdash; bakes the flag in before any optimization is possible. The order that compounds is: define the intent of the page, write the page so a classifier reading it concludes the intent you want, install tracking on top.</p>
+
+      <h3>4. Pre-click intent capture stops being a growth hack and becomes infrastructure</h3>
+
+      <p>A neutral assessment, quiz, or guide that fires a <code>Lead</code> event on a surface the classifier doesn't flag is not a clever marketing trick. It's the only place in a restricted-vertical funnel where the algorithm gets to see eligible signal at meaningful volume. Treat it like infrastructure: SLA, monitoring, conversion-rate-to-sale modeled, revenue-per-lead fed back via offline conversions. Funnels that survive restriction are usually the ones where the pre-click surface was engineered, not improvised.</p>
+
+      <h3>5. Restriction stops being an emergency and becomes a state in your system</h3>
+
+      <p>Treat &ldquo;dataset restricted&rdquo; the way a backend engineer treats &ldquo;upstream API degraded&rdquo;: a known state with a known runbook. Detect it through the Dataset Quality API, not through Ads Manager. Failover to a different funnel. Throttle spend on the affected one. Resume when state changes. The brands that stay in the game don't avoid restriction &mdash; they outlast it because their architecture treats it as a routine event instead of a crisis.</p>
+
+      <h2>What this predicts</h2>
+
+      <p>If the funnel-graph model is right, two things should keep happening, and they are.</p>
+
+      <p>One: enforcement gets better at reading subtler signal. The 2026 push into pre-serve AI review of creative, landing, and account history isn't a separate initiative &mdash; it's the same classifier reading more nodes of the graph earlier in the lifecycle. Expect the cost of cosmetic workarounds to keep rising. Expect the value of architectural separation to keep rising with it.</p>
+
+      <p>Two: the gap widens between brands that treat tracking as a layer and brands that treat their funnel as a system. The first group will keep cycling domains, renaming events, and buying short runways. The second group will quietly compound. From the outside it'll look like the second group has secret access. From the inside it's a different mental model.</p>
+
+      <h2>The one-line version</h2>
+
+      <p>Stop trying to hide your domain from Meta. Start designing funnels Meta would classify the way you'd want them to.</p>
+
+      <p>Everything else &mdash; the renames, the rotations, the bridges, the gateway choices, the EMQ tuning &mdash; is downstream of that. Get the funnel right and the rest of the playbook gets shorter. Get the funnel wrong and no playbook is long enough.</p>
+    </div>
+
+    <p class="endnote">If you're building tracking systems for sensitive verticals and want to push back on any of this, I want the argument. The only way these notes stay honest is if they get tested in someone else's account.</p>
+  </article>
+</main>
+
+<footer class="foot">
+  <span>&copy; <span id="year"></span> Akhlas</span>
+  <span>Built plain. No frameworks.</span>
+</footer>
+
+<script>document.getElementById('year').textContent=new Date().getFullYear()</script>
+</body>
+</html>
