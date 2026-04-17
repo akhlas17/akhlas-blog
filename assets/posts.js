@@ -2,12 +2,12 @@
 // Add new posts to the top of this array.
 const POSTS = [
   {
-    slug: "meta-blocks-at-the-domain",
-    title: "Meta blocks at the domain. Stop debugging your pixel.",
+    slug: "follow-one-event",
+    title: "Follow one event: what Meta actually does inside a health brand's pixel fire",
     date: "2026-04-17",
     dateLabel: "Apr 17, 2026",
-    dek: "Restriction is enforced at the domain level. Every fix at the pixel layer is the wrong layer. Here's the architecture that actually works.",
-    href: "/posts/meta-blocks-at-the-domain.html"
+    dek: "A patient, step-by-step walkthrough of what happens to a single Purchase event — and the three silent failures no playbook explains.",
+    href: "/posts/follow-one-event.html"
   }
 ];
 

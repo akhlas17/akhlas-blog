@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Follow one event: what Meta actually does inside a health brand's pixel fire — Akhlas</title>
+<meta name="description" content="A patient, step-by-step walkthrough of what happens to a single Purchase event from a health brand's website — and the three silent failures no playbook explains." />
+<meta name="color-scheme" content="light dark" />
+<link rel="stylesheet" href="/assets/style.css" />
+</head>
+<body>
+<header class="nav">
+  <a class="mark" href="/" aria-label="Home">akhlas</a>
+  <nav>
+    <a href="/blog.html">Writing</a>
+  </nav>
+</header>
+
+<main>
+  <article class="article">
+    <p class="kicker">Deep dive &middot; Meta tracking &middot; Health brands</p>
+    <h1>Follow one event: what Meta actually does inside a health brand's pixel fire</h1>
+    <p class="meta"><time datetime="2026-04-17">April 17, 2026</time> &nbsp;&middot;&nbsp; 15 min read</p>
+
+    <div class="prose" id="prose">
+      <p>Most advice you'll read about Meta's health restrictions skips the part that matters: what actually happens to your event between the moment a customer clicks &ldquo;Buy&rdquo; and the moment Meta's algorithm decides whether to use it.</p>
+      <p>Agencies sell you a fix. Playbooks list tactics. Nobody walks you through the pipeline. So we're going to do it the patient way &mdash; follow one single <code>Purchase</code> event, fired when someone buys a supplement on a wellness site, step by step through every checkpoint Meta runs it through. By the end you'll know exactly where health brands lose signal, why transport-layer fixes can't solve most of it, and what you can actually build instead.</p>
+      <p>No prior technical knowledge assumed. If you've ever wondered what your pixel is actually sending, this is the tour.</p>
+      <h2>Step 1 &mdash; the fire. What you actually send.</h2>
+
+      <p>A customer finishes checkout on <code>wellnessbrand.com/products/pcos-support</code>. Your Meta Pixel fires a <code>Purchase</code> event. Most brand owners have never seen their own payload. It looks something like this:</p>
+
+      <pre><code>{
+  "event_name": "Purchase",
+  "event_id": "ord-48201",
+  "event_time": 1713369014,
+  "event_source_url": "https://wellnessbrand.com/products/pcos-support",
+  "user_data": {
+    "em": "&lt;sha256 hashed email&gt;",
+    "ph": "&lt;sha256 hashed phone&gt;",
+    "fbp": "fb.1.1713368900.2039487123",
+    "fbc": "fb.1.1713368902.IwAR0abc123",
+    "client_ip_address": "203.0.113.42",
+    "client_user_agent": "Mozilla/5.0 ..."
+  },
+  "custom_data": {
+    "value": 79.00,
+    "currency": "USD",
+    "content_ids": ["PCOS-SUPP-01"],
+    "content_name": "PCOS Support Blend &mdash; 30 day",
+    "content_category": "hormonal-health/pcos"
+  }
+}</code></pre>
+
+      <p>That's the complete package. Six fields of user data, five fields of custom data, one event name, one event_id, one source URL. Every one of these matters, and Meta reads all of them.</p>
+
+      <p>Three things worth knowing about this payload that are usually glossed over:</p>
+
+      <ul>
+        <li><strong>The <code>event_source_url</code> is required</strong>, and it's the full URL of the page the event fired on. The path <code>/products/pcos-support</code> is part of what Meta receives. It isn't just domain-level.</li>
+        <li><strong><code>fbp</code> and <code>fbc</code> must not be hashed.</strong> These are Facebook's own first-party cookies. Hashing them &mdash; a mistake I see weekly &mdash; breaks matching 100%. Everything else that looks like PII (<code>em</code>, <code>ph</code>, <code>external_id</code>) must be SHA-256 hashed before it leaves your perimeter.</li>
+        <li><strong><code>content_name</code> and <code>content_category</code> are readable plain text.</strong> Not metadata. Not IDs. Plain human-readable strings, sent to Meta, stored in your dataset's history. This matters enormously in a few paragraphs.</li>
+      </ul>
+
+      <p>So the event leaves the customer's browser carrying all of that, and heads toward Meta. That's checkpoint one behind us.</p>
+
+      <h2>Step 2 &mdash; the server copy. Why CAPI isn't an escape hatch.</h2>
+
+      <p>If you have CAPI set up (and in 2026 you should &mdash; pixel-only setups miss 30-60% of conversions due to ad blockers, iOS privacy, and browser restrictions), your server fires its own copy of the same event to Meta's Graph API. Same event name. Same event_id. Same user and custom data, with the IP and user-agent added from the server's view of the request.</p>
+
+      <p>Here's the sentence Meta itself will tell you if you ask directly, and that almost no agency will quote back to you: <em>&ldquo;The Conversions API is not designed to bypass data-sharing policies.&rdquo;</em> Restrictions apply to both browser and server pipelines. The dataset that receives the CAPI event is the same dataset that receives the pixel event. Classification happens to the dataset, not to the pixel.</p>
+
+      <p>Read that twice if this is the first time you're seeing it plainly. Because every agency pitch built around &ldquo;just move to CAPI to fix your health restriction&rdquo; is selling you something CAPI was never going to do.</p>
+
+      <p>What CAPI <em>does</em> buy you, and why it's still worth building:</p>
+
+      <ul>
+        <li>Ad blockers can't stop server-side events. iOS privacy restrictions don't touch them. Pixel + CAPI together raises match rate from 60-70% to 85-95% and typical EMQ from 3.5-5.0 into the 7.5-9.0 range.</li>
+        <li>You control the payload. Every field going to Meta passes through your server first. That gives you one place to strip, normalize, validate, and enforce policy before anything leaves. This matters a lot in step 4.</li>
+        <li>You control timing. You can fire the server event exactly when the transaction commits in your database &mdash; not when a browser script happens to run.</li>
+      </ul>
+
+      <p>So: fire both the pixel and the server event. Just understand that the restriction layer comes later in the pipeline. Transport is not where the block lives.</p>
+
+      <h2>Step 3 &mdash; the deduplication match. The silent coverage killer.</h2>
+
+      <p>Meta now has two copies of your <code>Purchase</code> event arriving within seconds of each other. If they're set up correctly, Meta recognizes them as the same event using the shared <code>event_id</code> and counts it once. If they're set up <em>almost</em> correctly, Meta cannot match them and counts both &mdash; or more often, neither ends up in a usable optimization pool.</p>
+
+      <p>The four ways deduplication silently fails:</p>
+
+      <ul>
+        <li><strong>ID mismatch.</strong> Browser sends <code>ord-48201</code>. Server sends <code>ord_48201</code>. Different separator, different ID. Dedup zero.</li>
+        <li><strong>One side missing the ID entirely.</strong> Your browser fires with <code>event_id</code>, your server fires without. Dedup impossible &mdash; and Meta counts them as two separate events, giving you phantom volume that looks healthy while real coverage tanks.</li>
+        <li><strong>Timing drift.</strong> Dedup window is generous (48 hours), but real-time optimization treats them as separate events until the dedup runs. Fire server-side within seconds of the browser fire, not minutes.</li>
+        <li><strong>Vendor switch windows.</strong> When you migrate CAPI providers, there's usually a brief period where IDs don't align. Brands don't notice because the dashboard still shows events. Coverage is destroyed for that window anyway.</li>
+      </ul>
+
+      <p>Observed in the wild: one account moved from 42% deduplicated event coverage to 91% by fixing exactly one thing &mdash; the event_id contract between browser and server. No new events, no new ad spend, no renaming. Just an aligned ID. That's before the restriction conversation even starts.</p>
+
+      <p>Lesson: before you chase a restriction theory, confirm dedup is actually working. Go to Events Manager &rarr; Overview &rarr; your dataset. Look at the event overlap graph. If your deduplicated count is much smaller than your raw count, you have an ID alignment problem, not a restriction problem.</p>
+
+      <h2>Step 4 &mdash; the payload scan. The step nobody tells you about.</h2>
+
+      <p>This is the section I wish someone had written for me three years ago. It's not in Meta's marketing pages. It's not in most agency decks. It's buried in community threads and comes out only if you ask the right question.</p>
+
+      <p>Before Meta's classifier decides what your dataset is, and before the AEM pipeline decides whether to aggregate this event, the payload gets scanned for condition-level keywords. The keywords that have been observed triggering filtering or classification contribution include, but aren't limited to:</p>
+
+      <ul>
+        <li><code>weight loss</code>, <code>fat loss</code>, <code>obesity</code>, <code>BMI</code></li>
+        <li><code>PCOS</code>, <code>menopause</code>, <code>fertility</code>, <code>pregnancy</code></li>
+        <li><code>diabetes</code>, <code>insulin</code>, <code>blood sugar</code>, <code>A1C</code></li>
+        <li><code>ED</code>, <code>erectile</code>, <code>testosterone</code>, <code>libido</code></li>
+        <li><code>CBD</code>, <code>THC</code>, <code>cannabis</code>, <code>hemp</code></li>
+        <li><code>depression</code>, <code>anxiety</code>, <code>ADHD</code>, <code>mental health</code></li>
+        <li><code>hair loss</code>, <code>alopecia</code>, <code>finasteride</code>, <code>minoxidil</code></li>
+        <li>most named conditions, most prescription drug names, and many over-the-counter drug names</li>
+      </ul>
+
+      <p>The scan doesn't only read your event name. It reads <em>every text field in the payload</em>. Which means:</p>
+
+      <ul>
+        <li>Your <code>content_name</code> that says <code>&ldquo;PCOS Support Blend&rdquo;</code> triggers the scan.</li>
+        <li>Your <code>content_category</code> that says <code>&ldquo;hormonal-health/pcos&rdquo;</code> triggers the scan.</li>
+        <li>Your <code>event_source_url</code> that ends in <code>/products/pcos-support</code> triggers the scan.</li>
+        <li>A custom parameter called <code>condition</code> with value <code>&ldquo;PCOS&rdquo;</code> triggers the scan.</li>
+        <li>A product feed SKU description in your catalog that contains <code>&ldquo;PCOS&rdquo;</code> triggers the scan.</li>
+      </ul>
+
+      <p>Your event name can be a perfectly innocent <code>step_complete</code>. If the payload carries any of those strings, the classifier still sees them. This is why the &ldquo;just rename your event&rdquo; advice fails. It changes one string out of ten that Meta reads.</p>
+
+      <p>When you're already in Core Setup restriction (Tier 1), Meta's documented behavior is to strip &ldquo;anything in a URL following the domain&rdquo; and to discard custom parameters. So even payloads that would otherwise contribute to classification get the sensitive fragments removed before anything is stored. That sounds helpful until you realize it also removes the signal you were using for optimization: product-level custom audiences, URL-based custom conversions, retargeting on specific pages. All gone.</p>
+
+      <p>What a sanitized payload for the same <code>Purchase</code> looks like:</p>
+
+      <pre><code>{
+  "event_name": "Purchase",
+  "event_id": "ord-48201",
+  "event_source_url": "https://wellnessbrand.com/checkout/complete",
+  "custom_data": {
+    "value": 79.00,
+    "currency": "USD",
+    "content_ids": ["SKU-01"],
+    "content_name": "Product 01",
+    "content_category": "supplements"
+  }
+}</code></pre>
+
+      <p>Same event. No condition keywords. No revealing URL path. Neutral SKU and category. If your architecture routes checkout completion through a neutral URL (not a product-specific one), and your catalog doesn't use condition names in SKU descriptions, the payload carries zero classification fuel.</p>
+
+      <p>Important: this isn't a trick. You're not hiding the product from Meta. You're choosing to not transmit sensitive descriptors over the wire. That's what Meta's own compliance posture assumes you'll do in sensitive verticals. The brands that don't do it are the ones discovering the hard way that payload fields aren't just labels &mdash; they're the classifier's inputs.</p>
+
+      <h2>Step 5 &mdash; the domain check. The real block.</h2>
+
+      <p>Once the payload clears the keyword scan (or contributes to classification if it didn't), Meta looks at which dataset this event belongs to &mdash; and the dataset is keyed by the domain in <code>event_source_url</code>. Then it looks up the classification state of that dataset. Three things can happen.</p>
+
+      <ul>
+        <li><strong>Tier 1 &mdash; Core Setup.</strong> The dataset is in a mildly restricted state. Standard events still flow, but custom parameters and URL paths after the root domain are stripped. Your <code>content_name</code>, <code>content_category</code>, and URL-based custom conversions lose their granularity. Your optimization still functions, but less sharply.</li>
+        <li><strong>Tier 2 &mdash; Standard Event Restrictions.</strong> Specific lower-funnel events &mdash; commonly <code>Purchase</code>, <code>Lead</code>, <code>AddToCart</code> &mdash; are blocked at ingestion. The event arrives, Meta sees it, Meta drops it. The campaign keeps running but stops ingesting the signal it was optimizing on. You'll see volume on those events quietly decline in Events Manager even as traffic holds.</li>
+        <li><strong>Tier 3 &mdash; Full Restrictions.</strong> All event sharing from this dataset is blocked. The pixel still fires in the browser. The CAPI server still sends. Meta drops everything on ingestion. Your dataset becomes a write-only log that nothing reads from.</li>
+      </ul>
+
+      <p>The single most important diagnostic step nobody runs first: go to Events Manager, select your dataset, click Settings, and scroll to <em>Manage data source categories</em>. Meta tells you &mdash; in plain language, right there in the interface &mdash; which category your dataset has been classified as, and which tier of restriction is applied. Then go to the Data Restrictions panel. It lists specifically which events are limited or blocked.</p>
+
+      <p>If you don't know your current tier, every fix you're paying for is operating on a guess. The brands that waste the most money are the ones applying Tier 3 fixes to a Tier 1 problem, and vice versa.</p>
+
+      <p>One more thing most brands miss: Meta sends a notification when the tier changes &mdash; an email to the business manager admin, plus a banner in Events Manager. The email frequently goes to the person who set up the account originally, not the person running the ads today. If you've never seen a restriction notification, that doesn't mean you weren't restricted. It might mean the email went to someone who left the company.</p>
+
+      <h2>Step 6 &mdash; aggregation. What changed in June 2025, and why the old playbook is wrong.</h2>
+
+      <p>Assuming the event survived the domain check, it enters Meta's aggregation and optimization machinery. If you've read any health-restriction playbook written before mid-2025, it probably told you to &ldquo;prioritize your 8 AEM conversion events.&rdquo; That advice is now wrong in every account. In June 2025, Meta removed both the 8-event cap and the manual prioritization requirement. The AEM configuration tab disappeared from Events Manager entirely.</p>
+
+      <p>Today, all eligible events are aggregated automatically. There is no ranking to manage. There is no slot to reserve. The lever shifted from &ldquo;which 8 events do I pick&rdquo; to &ldquo;which events are still eligible at my tier.&rdquo;</p>
+
+      <p>Why this matters for health brands specifically: the old game of cramming a renamed custom event into a priority slot to keep iOS attribution is over. The new game is whether the event is eligible at all. If your <code>Purchase</code> is blocked at Tier 2, no prioritization theater would have saved it. If your <code>Lead</code> is eligible at Tier 2, it's already being aggregated automatically.</p>
+
+      <p>If someone's pitching you an AEM prioritization strategy in 2026, they're either recycling 2023 decks or haven't logged into Events Manager in a year. Take the meeting elsewhere.</p>
+
+      <h2>Step 7 &mdash; attribution. What quietly changed on January 12, 2026.</h2>
+
+      <p>On January 12, 2026, Meta deprecated the 7-day view and 28-day view attribution windows. The default attribution window is now 7-day click plus 1-day view. Industry-wide, reported conversions dropped 15-30% overnight. Not because campaigns got worse &mdash; because the measurement window shrank.</p>
+
+      <p>For a restricted health brand, this layers on top of every other signal loss you're already managing. You look at your dashboard, see reported conversions dropping, assume the restriction is getting worse, and panic-rewrite the funnel. In reality, some portion of that drop is just the measurement change. The underlying performance may be fine.</p>
+
+      <p>Diagnostic instinct to develop: when you see a performance drop, check the date. If it aligns with a Meta measurement change, isolate the policy effect from the restriction effect before acting. Restrictions and attribution changes are independent systems, and treating them as one story leads to fixing the wrong problem.</p>
+
+      <h2>Step 8 &mdash; what you can actually see from the outside.</h2>
+
+      <p>Your <code>Purchase</code> event has now run the full gauntlet: browser fire, server copy, dedup match, keyword scan, domain check, aggregation, attribution. Somewhere along the way it either became usable signal or got filtered out. You'd like to know which.</p>
+
+      <p>Three places to look, in order of most-ignored to least:</p>
+
+      <ol>
+        <li><strong>Dataset Quality API.</strong> Meta exposes your dataset's quality metrics, restriction status, and event-level signals programmatically. This is the single most under-used lever for health brands. Pulling it into your own dashboard lets you detect a tier change within hours instead of weeks. If you're running at scale in a restricted vertical and you're not querying this API, you're flying blind on purpose.</li>
+        <li><strong>Events Manager &rarr; Settings &rarr; Manage data source categories.</strong> Plain-language tier status. Look monthly at minimum.</li>
+        <li><strong>Events Manager &rarr; Overview &rarr; event activity per event.</strong> Compare volumes to traffic. A specific event silently dropping while traffic holds is the earliest in-app symptom of Tier 2 restriction.</li>
+      </ol>
+
+      <p>Ads Manager reports will not tell you any of this clearly. They summarize what Meta chose to share. The signal you actually need lives in Events Manager and the Dataset Quality API.</p>
+
+      <h2>What this walk adds up to</h2>
+
+      <p>Every popular fix you've been offered maps to exactly one checkpoint:</p>
+
+      <ul>
+        <li>Renaming events: changes step 4 for one string out of ten. Doesn't change steps 5-8.</li>
+        <li>Switching to CAPI: changes step 2 (transport). Doesn't change steps 4-8.</li>
+        <li>Adding LDU flag: unrelated &mdash; that's a state-privacy-law system, not the health classifier.</li>
+        <li>New pixel on same domain: doesn't change the dataset identity in step 5.</li>
+        <li>New subdomain: usually doesn't change step 5 either.</li>
+        <li>Fresh domain: changes step 5 briefly, then reverts as steps 1, 4, and 5 accumulate the same evidence again.</li>
+      </ul>
+
+      <p>What actually compounds is work done at the right checkpoint. Payload sanitization at step 4. Domain architecture &mdash; neutral pre-click surfaces on their own datasets &mdash; at step 5. Monitoring at step 8, so you know your tier the moment it changes instead of three P&amp;L cycles later. Attribution-aware dashboarding at step 7, so you stop mistaking measurement changes for restriction changes.</p>
+
+      <p>None of this is a loophole. All of it is architecture. The brands that survive restriction aren't running workarounds &mdash; they're running systems designed with the understanding that Meta will read everything they send, classify what it reads, and enforce the classification at the domain. Build for that reality and most of the playbook you've been sold stops being necessary.</p>
+
+      <h2>The short version, if you made it this far</h2>
+
+      <p>Meta's health restriction is not one system. It's a sequence of checkpoints &mdash; keyword scan, domain check, aggregation, attribution &mdash; each of which can drop your signal for different reasons. Renaming events fixes one string in one step. Transport changes don't fix any of it. The real work is a clean payload contract, a multi-domain conversion architecture, and monitoring that lives outside Ads Manager.</p>
+
+      <p>Nobody explains this end to end because the pieces sit in different teams' documentation and different agencies' sales decks. But once you've seen one event make the full journey, the whole thing stops being mysterious. It's a pipeline. Work the pipeline.</p>
+    </div>
+
+    <p class="endnote">If any step of this doesn't match what you're observing in your own account, I want to hear it. The only way these notes stay accurate is when they get tested in someone else's pipeline.</p>
+  </article>
+</main>
+
+<footer class="foot">
+  <span>&copy; <span id="year"></span> Akhlas</span>
+  <span>Built plain. No frameworks.</span>
+</footer>
+
+<script>document.getElementById('year').textContent=new Date().getFullYear()</script>
+</body>
+</html>
