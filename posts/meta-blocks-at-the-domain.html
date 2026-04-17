@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Meta blocks at the domain. Stop debugging your pixel. — Akhlas</title>
+<meta name="description" content="Restriction is enforced at the domain level. Every fix at the pixel layer is the wrong layer. Here's the architecture that actually works." />
+<meta name="color-scheme" content="light dark" />
+<link rel="stylesheet" href="/assets/style.css" />
+</head>
+<body>
+<header class="nav">
+  <a class="mark" href="/" aria-label="Home">akhlas</a>
+  <nav>
+    <a href="/blog.html">Writing</a>
+  </nav>
+</header>
+
+<main>
+  <article class="article">
+    <p class="kicker">Essay &middot; Meta tracking &middot; Health brands</p>
+    <h1>Meta blocks at the domain. Stop debugging your pixel.</h1>
+    <p class="meta"><time datetime="2026-04-17">April 17, 2026</time> &nbsp;&middot;&nbsp; 9 min read</p>
+
+    <div class="prose" id="prose">
+      <p>Almost every health brand owner I see fighting Meta's restrictions is debugging the wrong layer. They're tweaking event names, swapping CAPI vendors, adding LDU flags, deduplicating identifiers, hashing harder. The work is real. The layer is wrong.</p>
+      <p>Meta restricts at the domain. Until that one fact rearranges your mental model, every fix you ship at the pixel layer is going to feel like it should have worked, and then quietly not.</p>
+      <h2>The unit of restriction is the domain. Not the pixel, not the event, not the vendor.</h2>
+
+      <p>Meta's classifier reads the content on your domain &mdash; landing page text, product descriptions, catalog feed, the URL paths events fire from, and the historical pattern of payloads it has been ingesting from that domain. When that picture crosses a threshold for a regulated category, Meta restricts the dataset bound to that domain.</p>
+
+      <p>That sentence is the whole game. Three things follow from it that almost nobody is told plainly:</p>
+
+      <ul>
+        <li><strong>The pixel is a sensor, not the unit.</strong> The pixel ID is a label inside the dataset Meta keeps for your domain. Replacing the pixel doesn't move the unit.</li>
+        <li><strong>The CAPI vendor is transport, not the unit.</strong> Whether events ship through Meta's gateway, Stape, a custom Node server, or a Cloudflare Worker, the destination dataset is identified by the same domain. Transport doesn't move the unit either.</li>
+        <li><strong>Event names are inputs to classification, not the unit.</strong> Renaming standard events to harmless customs cleans up one input. The other inputs &mdash; landing page, source URL, catalog, history &mdash; still describe what your domain is. The classifier reads all of them.</li>
+      </ul>
+
+      <p>The reason this matters: when the unit is the (domain, dataset) pair and your fix touches a label inside that pair, you haven't fixed anything. You've redecorated the room you're locked in.</p>
+
+      <h2>Why every popular &ldquo;fix&rdquo; structurally cannot fix what it claims to</h2>
+
+      <p>Run each of these against the unit-of-restriction rule and watch the math stop working:</p>
+
+      <ul>
+        <li><strong>Renaming events.</strong> Same domain, same dataset, same classification inputs. The renamed event fires from the same source URL and the same content surface. Net change to the unit: zero.</li>
+        <li><strong>Switching to CAPI-only.</strong> Same destination dataset. Server transport just changes who shipped the request. Meta still reads the <code>event_source_url</code>, the page that triggered the event, the catalog reference, the historical payload pattern. The unit doesn't move.</li>
+        <li><strong>New CAPI vendor (Gateway &rarr; Stape &rarr; custom).</strong> Same dataset. The classifier doesn't know what user-agent shipped your event. Net change: zero, except for whatever payload control the new vendor gives you, which you should have had anyway.</li>
+        <li><strong>Adding the LDU flag.</strong> Different system entirely. Limited Data Use is Meta's flag for state privacy laws (CA, CO, CT). It changes how Meta processes the event for those users. It has nothing to do with the health classifier. If anyone is solving your health restriction by tweaking LDU, get a different opinion.</li>
+        <li><strong>Spinning up a new pixel on the same domain.</strong> Same unit. The new pixel inherits the dataset's classification because the dataset is keyed by the domain it serves, not by the pixel ID label.</li>
+        <li><strong>Subdomain on the same root.</strong> Restrictions tend to apply at root-domain level. <code>shop.brand.com</code> usually inherits whatever happens to <code>brand.com</code>, especially when the subdomain shares a brand entity, a catalog, or cross-links.</li>
+        <li><strong>Fresh domain.</strong> Genuinely a new unit &mdash; for as long as the new domain hasn't accumulated the inputs that triggered the original classification. With the same landing copy, the same product names, the same payload shape, the new domain reaches the same classification within weeks. Fresh-domain rotation is a delay tactic, not a fix.</li>
+      </ul>
+
+      <p>None of these are bad practices on their own. CAPI is worth doing. Cleaner event names are worth doing. Dedup is worth doing. They're table stakes for tracking quality. They're not solutions to domain-level restriction, and pretending they are is how a quarter disappears.</p>
+
+      <h2>What actually changes the unit: multi-domain conversion architecture</h2>
+
+      <p>If the unit of restriction is the (domain, dataset) pair, the only durable answer is to stop having all your eligible optimization events fire on a single domain that Meta has every reason to classify. You design for multiple datasets across multiple domains, by intent.</p>
+
+      <p>A working version looks like this:</p>
+
+      <ul>
+        <li><strong>A neutral pre-click domain</strong> hosts the assessment, the quiz, the educational content, the lead capture. Its content reads as informational, not transactional. Its dataset is bound to that domain. The events that fire here &mdash; <code>Lead</code>, <code>ViewContent</code>, custom upper-funnel signals &mdash; are the events you optimize on.</li>
+        <li><strong>The brand transactional domain</strong> hosts the actual product, the cart, the checkout. Its dataset is whatever it is. You don't depend on it for ad optimization. If it's restricted, your campaigns don't notice.</li>
+        <li><strong>A server-side routing layer</strong> moves users between the two surfaces without making the architecture visible. Lead capture on the neutral surface, server hand-off, transactional flow on the brand surface, offline conversion sent back to attribute revenue to the original lead.</li>
+        <li><strong>Each domain has its own dataset</strong> in Events Manager. Independent classification, independent restriction status, independent recovery paths.</li>
+      </ul>
+
+      <p>This is not a workaround. You are not hiding anything from Meta. The neutral surface is real content with a real reason to exist. The transactional surface is your actual store. What you've done is stop binding your ad optimization to the domain Meta is most likely to flag.</p>
+
+      <p>This is the move that actually compounds. Every other fix you do at the pixel layer keeps working better on top of it &mdash; because now the work is happening on the right unit.</p>
+
+      <h2>The questions this answers cleanly</h2>
+
+      <p>Once the unit is the (domain, dataset) pair, four conversations that used to be confusing become short.</p>
+
+      <p><strong>&ldquo;Why didn't switching to CAPI fix my restriction?&rdquo;</strong> &mdash; Because CAPI is transport. The dataset is the same one bound to the same domain. CAPI was never the layer that could fix a domain-level block.</p>
+
+      <p><strong>&ldquo;Why did the new pixel inherit the flag?&rdquo;</strong> &mdash; Because pixels are labels inside a dataset, and the dataset is keyed to the domain. New pixel, same domain, same dataset, same classification.</p>
+
+      <p><strong>&ldquo;Why does my competitor get away with the same offer?&rdquo;</strong> &mdash; Because their conversion architecture probably isn't bound to a single brand domain. They likely run a neutral pre-click surface that doesn't trigger classification, and the optimization events they care about live there. The actual transactional site looks like everyone else's. The unit they optimize on is structurally cleaner.</p>
+
+      <p><strong>&ldquo;Why did the fresh domain stop working after a few weeks?&rdquo;</strong> &mdash; Because the fresh domain accumulated the same classification inputs as the original (same content, same product names, same payload pattern). The unit was new on day one and structurally identical by week three.</p>
+
+      <h2>The honest limitations</h2>
+
+      <p>Multi-domain architecture isn't free. The neutral surface has to be real content, not a thin redirect &mdash; cosmetic bridges get treated as cloaking-adjacent and the enforcement around that has gotten meaningfully worse in 2026. The server-side routing has to be built and maintained. Lead-to-sale conversion has to be modeled, with offline conversions feeding revenue back so Meta's algorithm has something to optimize toward. None of this is heroic engineering, but it's not a Saturday afternoon either.</p>
+
+      <p>And it doesn't &ldquo;unrestrict&rdquo; your brand domain. The brand domain stays whatever Meta decides it is. What you've done is move the events that need to optimize off that surface and onto one whose unit is genuinely different.</p>
+
+      <h2>The one-line version</h2>
+
+      <p>The pixel is a sensor. The dataset is a record. The domain is the unit. Build with the right unit in mind and most of the playbook gets shorter. Build with the wrong unit in mind and no playbook is long enough.</p>
+    </div>
+
+    <p class="endnote">If your account behaves differently than what's described here, push back. Field notes only stay accurate when they get tested in someone else's environment.</p>
+  </article>
+</main>
+
+<footer class="foot">
+  <span>&copy; <span id="year"></span> Akhlas</span>
+  <span>Built plain. No frameworks.</span>
+</footer>
+
+<script>document.getElementById('year').textContent=new Date().getFullYear()</script>
+</body>
+</html>

@@ -2,12 +2,12 @@
 // Add new posts to the top of this array.
 const POSTS = [
   {
-    slug: "meta-classifies-funnels-not-domains",
-    title: "Meta isn't classifying your domain. It's classifying your funnel.",
+    slug: "meta-blocks-at-the-domain",
+    title: "Meta blocks at the domain. Stop debugging your pixel.",
     date: "2026-04-17",
     dateLabel: "Apr 17, 2026",
-    dek: "After watching dozens of health brands get restricted, the same pattern keeps showing up — and it isn't where anyone's looking.",
-    href: "/posts/meta-classifies-funnels-not-domains.html"
+    dek: "Restriction is enforced at the domain level. Every fix at the pixel layer is the wrong layer. Here's the architecture that actually works.",
+    href: "/posts/meta-blocks-at-the-domain.html"
   }
 ];
 
