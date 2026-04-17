@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Meta's pixel is in the waiting room — Akhlas</title>
-<meta name="description" content="A field note for brand owners who think they're just running a Facebook ad." />
+<title>Your domain is the diagnosis — Akhlas</title>
+<meta name="description" content="A developer's field notes on how Meta actually classifies health brands across Pixel and CAPI, and where signal still survives." />
 <meta name="color-scheme" content="light dark" />
 <link rel="stylesheet" href="/assets/style.css" />
 </head>
@@ -19,16 +19,120 @@
 
 <main>
   <article class="article">
-    <p class="kicker">Field note &middot; Ad tech</p>
-    <h1>Meta's pixel is in the waiting room, and your brand is paying the bill</h1>
-    <p class="meta"><time datetime="2026-04-17">April 17, 2026</time> &nbsp;&middot;&nbsp; 6 min read</p>
+    <p class="kicker">Field note &middot; Ad tech &middot; Tracking</p>
+    <h1>Your domain is the diagnosis</h1>
+    <p class="meta"><time datetime="2026-04-17">April 17, 2026</time> &nbsp;&middot;&nbsp; 9 min read &nbsp;&middot;&nbsp; Research</p>
 
     <div class="prose" id="prose">
-      <!-- Content drops in here once the research summary is confirmed. -->
-      <p><em>Draft in progress. The findings go here &mdash; plain language, a few jokes, zero filler.</em></p>
+
+      <p>Your ads are approved. Creatives are serving. Purchase events are ticking over in Events Manager. Then one morning the ticker slows down, ROAS drops, retargeting audiences thin out, and nobody sends you an email about it. Support tells you everything looks fine. The ads, technically, are fine. It's your domain that's in trouble.</p>
+
+      <p>This post is a developer's walk-through of how Meta's tracking stack appears to behave in sensitive or restricted verticals &mdash; especially health-adjacent brands &mdash; based on public documentation, Meta's own help center, and a lot of practitioner reports. I'm going to avoid declarative claims where I can, because this system moves every quarter and half of what you read is already stale. Treat this as a map of what to test, not a spec.</p>
+
+      <h2>1. Meta doesn't classify your ad. It classifies your domain.</h2>
+
+      <p>The single most consistent pattern in reports: your ad can be approved and delivering while your dataset is quietly restricted at the data layer. These are two independent pipelines. Ad review looks at the creative and policy surface. Data-sharing restrictions look at the <em>domain</em> &mdash; landing page copy, product descriptions, URL structure, and the payloads your Pixel and CAPI have been sending back over time.</p>
+
+      <p>If that classification flips, you don't get a rejection notice. You get a subtle note in Events Manager, a limited status on the dataset, lower-funnel events (<code>Purchase</code>, <code>AddToCart</code>, <code>InitiateCheckout</code>) going dark for optimization, and audiences built on those events quietly rotting. Ad policy and data policy are not the same policy. If you only monitor one, you'll miss the other.</p>
+
+      <h2>2. What the classifier seems to read</h2>
+
+      <p>From Meta's documentation and the reverse-engineering community, the signals that appear to influence classification include:</p>
+
+      <ul>
+        <li><strong>Landing page content.</strong> Product names, headlines, H1s, and body copy. Words like <em>weight loss</em>, <em>PCOS</em>, <em>ED</em>, <em>diabetes</em>, <em>anxiety</em>, and similar condition-level terms are repeatedly cited as triggers.</li>
+        <li><strong>URL structure.</strong> The path and query string. A route like <code>/products/ed-gummies</code> is a different signal than <code>/collections/men-daily</code>, even if the page content is identical.</li>
+        <li><strong>Event source URL.</strong> The <code>event_source_url</code> parameter in Pixel and CAPI payloads. Sensitive path segments here have been reported to cause event registration to fail on both standard and custom events &mdash; not just to get reclassified.</li>
+        <li><strong>Event payloads.</strong> <code>content_name</code>, <code>content_category</code>, custom event names, and anything else that effectively tells Meta what product is being bought.</li>
+        <li><strong>Ad creative and copy.</strong> Still relevant, but downstream of the domain. A compliant ad won't save a condition-heavy landing page.</li>
+      </ul>
+
+      <p>The category itself is broad. Meta's help center describes it as businesses &ldquo;associated with medical conditions, specific health statuses, or provider/patient relationships.&rdquo; In practice that sweeps in a lot of supplements, fitness programs, telehealth, mental wellness, and DTC brands that never thought of themselves as &ldquo;healthcare.&rdquo;</p>
+
+      <h2>3. The tier system, briefly</h2>
+
+      <p>As of early 2025, public reporting describes a tiered framework. The higher the tier, the more events are blocked for conversion optimization and the smaller the usable signal surface becomes. <code>Lead</code> tends to survive under lower tiers, which is part of why so many brands end up quietly re-plumbing their funnel around a lead step. Your mileage will vary &mdash; the tier isn't something you see on the dashboard, it's inferred from what still works.</p>
+
+      <h2>4. Standard events vs. custom events in restricted context</h2>
+
+      <p>Here's where intuition often fails. A common assumption: &ldquo;custom event = safer.&rdquo; That's not quite right.</p>
+
+      <p>Standard events are still the best-performing signal <em>when they're allowed</em>. The algorithm has enormous priors on <code>Purchase</code>, <code>AddToCart</code>, and <code>Lead</code>. Learning exits faster, auction dynamics are kinder, and cross-account priors help small datasets. But in a classified domain, standard events are also the first to be restricted. You lose optimization for exactly the events Meta knows best.</p>
+
+      <p>Custom events can survive in restricted domains, <em>if</em> two things are true: (a) the event name and payload don't re-encode the sensitive context the classifier just stripped you of, and (b) the event has enough volume and match quality to actually learn from. Naming a custom event <code>PCOS_Purchase</code> is a self-own. Naming it <code>Converted_Core</code>, firing it server-side, hashing identifiers, and then building a Custom Conversion on top of it is what practitioners seem to converge on.</p>
+
+      <p>The key reframe: <strong>it's not Pixel vs. CAPI and not standard vs. custom. It's what you say in the payload.</strong> Switching transport doesn't change classification. Changing what you transmit does.</p>
+
+      <h2>5. AEM isn't the boss it used to be</h2>
+
+      <p>Aggregated Event Measurement used to be the thing everyone tuned obsessively: eight events, ranked by priority, the post-iOS-14.5 compromise protocol. That model changed in June 2025. Meta removed the 8-event cap and dropped the manual priority list. The AEM tab is gone from Events Manager. All eligible standard and custom events now get processed automatically.</p>
+
+      <p>Two things worth noting:</p>
+
+      <ul>
+        <li>&ldquo;Eligible&rdquo; is the word doing work. For classified domains, eligibility is still narrow. The ceiling moved; the floor didn't.</li>
+        <li>Even without prioritization, signal loss on iOS, in-app browsers, and privacy-mode traffic hasn't disappeared. It's just no longer something you configure away &mdash; you engineer around it with server-side, deduplication, and match quality.</li>
+      </ul>
+
+      <h2>6. EMQ still rules the inner loop</h2>
+
+      <p>Event Match Quality is the most under-appreciated lever in restricted datasets. When the classifier takes away some of your signal, the signal you <em>do</em> send has to carry more weight. EMQ is how Meta decides whether to trust it.</p>
+
+      <p>Operational notes from what works:</p>
+
+      <ul>
+        <li>Hashed email and phone are the two highest-impact parameters. Everything else (first name, last name, zip, country, city, date of birth, external ID) is incremental &mdash; but the increments stack.</li>
+        <li>Send <code>fbp</code> and <code>fbc</code> in plaintext, not hashed. Hashing them breaks Meta's ability to reconcile server events to browser sessions. This is a silent performance killer when it goes wrong.</li>
+        <li>Run Pixel and CAPI in parallel with a shared <code>event_id</code> per event. Deduplication isn't optional for serious datasets; it's how Meta avoids double-counting and also how it backfills when one side is missing.</li>
+        <li>Practitioners report EMQ targets around 8.0+ on <code>AddToCart</code> and 8.8&ndash;9.3 on <code>Purchase</code>. Moving from the 8.5 range into the 9+ range has been associated with double-digit CPA improvements in case studies &mdash; take the exact numbers with salt, but the direction is consistent.</li>
+      </ul>
+
+      <h2>7. Edge cases worth knowing</h2>
+
+      <p>A few things that bite people and don't make it into the docs:</p>
+
+      <ul>
+        <li><strong>Sensitive slugs nuke the whole event.</strong> If your <code>event_source_url</code> contains a condition-flavored path segment, both standard and custom events have been reported to fail registration, not just get re-classified. The fix is to sanitize or strip the URL you send.</li>
+        <li><strong>Approved ads, silent data restriction.</strong> Because ad review and data policy are separate, you can be in the worst state of the two: spend continues, signal degrades, CAC climbs. The only reliable detection is monitoring Events Manager itself or automating it via the Dataset Quality API.</li>
+        <li><strong>New ad accounts re-flag fast.</strong> Moving to a fresh account without also fixing the domain-level signals tends to buy you weeks, not months. The classifier catches up.</li>
+        <li><strong>Lead is often untouched.</strong> Under lower tiers, a well-defined lead step on a neutral page can keep optimization working while Purchase goes dark &mdash; at the cost of a funnel redesign.</li>
+        <li><strong>Bridge pages and domain separation.</strong> Splitting the ad landing surface from the transactional domain is a recurring pattern. It's a legitimate architectural choice when the brand is genuinely multi-surface; it's a fragile hack when the bridge is obviously a disguise. The classifier is not naive about this.</li>
+      </ul>
+
+      <h2>8. Patterns that survive under restriction</h2>
+
+      <p>If I had to summarize what appears to work across real implementations:</p>
+
+      <ol>
+        <li><strong>Treat tracking like an event contract.</strong> Decide at design time what goes into <code>event_name</code>, <code>content_name</code>, URLs, and parameters. Enforce it server-side. Don't let marketing freely add descriptive strings downstream.</li>
+        <li><strong>Name events for behavior, not condition.</strong> <code>Checkout_Complete</code>, <code>Consult_Booked</code>, <code>Plan_Started</code> are behavioral. <code>PCOS_Protocol_Purchase</code> is a classifier magnet.</li>
+        <li><strong>Push everything server-side, but for the right reason.</strong> CAPI isn't a loophole &mdash; it's a control point. It lets you strip, normalize, hash, and govern payloads before they leave your perimeter.</li>
+        <li><strong>Invest in match quality like it's your job.</strong> Hashed email and phone on every event, <code>fbp</code>/<code>fbc</code> unhashed, <code>event_id</code> for dedup. EMQ is the thing you can actually fix.</li>
+        <li><strong>Monitor the dataset, not just the ads.</strong> The Dataset Quality API exists for a reason. Alert on restriction status, EMQ drift, and event volume drops, not just CPA.</li>
+        <li><strong>Design for partial signal loss.</strong> Assume 20&ndash;40% of events will not reconcile on any given day. Architecture that relies on 1:1 attribution will feel broken; architecture that leans on match-quality, aggregates, and incrementality will feel normal.</li>
+      </ol>
+
+      <h2>9. What to validate yourself</h2>
+
+      <p>Nothing in this post should be taken as final. This is a system that changes on Meta's timeline, not ours. A short list of things worth testing in your own account:</p>
+
+      <ul>
+        <li>Fire identical events from a sanitized <code>event_source_url</code> and a condition-flavored one. Compare registration, EMQ, and optimization eligibility.</li>
+        <li>Compare a neutrally-named custom event to a standard <code>Purchase</code> on the same restricted dataset. Look at what appears in Events Manager, not just what the ads manager reports.</li>
+        <li>Run a bridge-page variant and a direct-to-brand variant in parallel. Watch domain classification over 2&ndash;4 weeks, not days.</li>
+        <li>Toggle identifier payloads: email-only, email + phone, full set. Graph EMQ against each.</li>
+        <li>Pull the Dataset Quality API daily into your own dashboard. You will notice restriction shifts before your media buyer does.</li>
+      </ul>
+
+      <hr />
+
+      <p>The honest summary: Meta has a classifier. It reads more of your surface than most teams assume. It treats your domain as the subject of study, not your ad. You can't out-creative a domain classification, and you can't out-transport it by flipping from Pixel to CAPI. What you can do is shape the payload, engineer for match quality, and design a funnel that doesn't collapse when a single event goes dark.</p>
+
+      <p>Build the system so that losing a signal is an inconvenience, not an extinction event. Then test everything. The platform will keep moving; your job is to notice first.</p>
+
     </div>
 
-    <p class="endnote">Thanks for reading. If this hit a nerve, tell a friend who still calls it &ldquo;the Facebook pixel.&rdquo;</p>
+    <p class="endnote">Notes, pushback, or counter-evidence welcome. I'd rather be corrected than confident.</p>
   </article>
 </main>
 

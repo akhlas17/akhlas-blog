@@ -3,10 +3,10 @@
 const POSTS = [
   {
     slug: "meta-pixel-is-watching",
-    title: "Meta's pixel is in the waiting room, and your brand is paying the bill",
+    title: "Your domain is the diagnosis",
     date: "2026-04-17",
     dateLabel: "Apr 17, 2026",
-    dek: "A field note for brand owners who think they're just running a Facebook ad.",
+    dek: "A developer's field notes on how Meta actually classifies health brands across Pixel and CAPI, and where signal still survives.",
     href: "/posts/meta-pixel-is-watching.html"
   }
 ];
