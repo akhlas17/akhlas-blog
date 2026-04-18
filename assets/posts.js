@@ -2,12 +2,12 @@
 // Add new posts to the top of this array.
 const POSTS = [
   {
-    slug: "follow-one-event",
-    title: "Follow one event: what Meta actually does inside a health brand's pixel fire",
+    slug: "under-metas-hood",
+    title: "Under Meta's hood: the health restriction, unmasked",
     date: "2026-04-17",
     dateLabel: "Apr 17, 2026",
-    dek: "A patient, step-by-step walkthrough of what happens to a single Purchase event — and the three silent failures no playbook explains.",
-    href: "/posts/follow-one-event.html"
+    dek: "What the classifier actually reads. What each tier really blocks. What happens in the scenarios nobody answers. What genuinely doesn't matter.",
+    href: "/posts/under-metas-hood.html"
   }
 ];
 

@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Under Meta's hood: the health restriction, unmasked — Akhlas</title>
+<meta name="description" content="What the classifier actually reads. What each tier really blocks. What happens in the scenarios nobody answers. What genuinely doesn't matter. The reference nobody wrote." />
+<meta name="color-scheme" content="light dark" />
+<link rel="stylesheet" href="/assets/style.css" />
+</head>
+<body>
+<header class="nav">
+  <a class="mark" href="/" aria-label="Home">akhlas</a>
+  <nav>
+    <a href="/blog.html">Writing</a>
+  </nav>
+</header>
+
+<main>
+  <article class="article">
+    <p class="kicker">Reference &middot; Meta tracking &middot; Health brands</p>
+    <h1>Under Meta's hood: the health restriction, unmasked</h1>
+    <p class="meta"><time datetime="2026-04-17">April 17, 2026</time> &nbsp;&middot;&nbsp; 18 min read</p>
+
+    <div class="prose" id="prose">
+      <p>Every health brand I've helped has landed in the same room. Ads running. Performance dying. A folder of contradictory advice from three agencies. Meta support answering with the same canned paragraph. Official docs describing what <em>exists</em> but never what <em>happens</em>. Nobody saying what actually goes on inside the box.</p>
+      <p>This is the reference I wish someone had handed me. Six sections, each self-contained, all built from what's observable under the hood &mdash; not what the docs say, not what the agencies sell, not what your rep reads off a script.</p>
+      <p>Read top to bottom or jump to the answer you need:</p>
+      <ol>
+        <li><a href="#classifier-reads">What Meta's classifier actually reads &mdash; in priority order</a></li>
+        <li><a href="#tiers">What each restriction tier really blocks</a></li>
+        <li><a href="#matters">What matters. What doesn't. A binary cheat sheet.</a></li>
+        <li><a href="#scenarios">&ldquo;What happens if&hellip;&rdquo; &mdash; the scenarios nobody answers</a></li>
+        <li><a href="#timing">Timing and aging &mdash; the mysteries no doc explains</a></li>
+        <li><a href="#support">The support black hole &mdash; and the three surfaces that actually tell you the truth</a></li>
+      </ol>
+      <h2 id="classifier-reads">1. What the classifier actually reads</h2>
+
+      <p>Meta doesn't publish the classifier's feature list. Here's the observed input priority, strongest to weakest, after watching dozens of datasets get classified, un-classified (rarely), and re-classified.</p>
+
+      <ol>
+        <li><strong>Landing page body text.</strong> The single biggest signal. Headers, product descriptions, testimonial copy, FAQ sections. If your pages say &ldquo;PCOS,&rdquo; &ldquo;diabetes,&rdquo; &ldquo;weight loss,&rdquo; &ldquo;erectile,&rdquo; &ldquo;CBD,&rdquo; &ldquo;THC,&rdquo; or any named condition or prescription drug, no downstream fix compensates. The classifier reads the page. This is step one.</li>
+        <li><strong><code>event_source_url</code> path.</strong> Not just the domain &mdash; the full path. <code>/products/pcos-support</code> is read as content. The path contributes to classification before it ever gets stripped at Tier 1. People assume Core Setup means the path was never seen. It was seen, classified against, then stripped for storage.</li>
+        <li><strong><code>content_name</code> and <code>content_category</code> strings.</strong> Plain human-readable text. &ldquo;Hormonal health / PCOS&rdquo; in your category is read by the same scanner that reads your page. Same weight, maybe more &mdash; because it's explicit taxonomy.</li>
+        <li><strong>Product catalog feed.</strong> If you're using Commerce Manager or running DPA, your catalog descriptions are part of the signal pool. A clean pixel payload doesn't help if your catalog feed still calls your SKU &ldquo;PCOS Relief Blend.&rdquo;</li>
+        <li><strong>Event name semantics &mdash; for standard events only.</strong> <code>Purchase</code>, <code>Lead</code>, <code>AddToCart</code> carry pre-classified meanings. Custom events don't. But the classifier still reads the rest of the payload even when the event name is a harmless <code>step_complete</code>. Renaming alone moves one signal out of ten.</li>
+        <li><strong>Business Manager and ad account history.</strong> What this account has been advertising for the last several months. Not just this dataset &mdash; the account. Restrictions don't migrate wholesale across accounts, but history informs how fast classification hits a fresh dataset inside an account with prior health-vertical activity.</li>
+      </ol>
+
+      <p>Inputs the classifier doesn't read in any meaningful way:</p>
+
+      <ul>
+        <li>Which CAPI vendor shipped the request</li>
+        <li>Your server's IP address, geographic region, TLS version, or user-agent</li>
+        <li>The TLD of your domain (<code>.com</code> vs <code>.health</code> vs <code>.io</code>)</li>
+        <li>Whether you use GTM client-side, GTM server-side, or direct</li>
+        <li>Whether you route through Cloudflare or edge compute</li>
+        <li>The number of custom parameters beyond a handful (quality &gt; quantity)</li>
+        <li>Creative approval status &mdash; ad review and data restriction are separate pipelines</li>
+      </ul>
+
+      <p>If an agency is pitching you a fix that operates on the second list, they are selling you work on inputs the classifier doesn't weigh.</p>
+
+      <h2 id="tiers">2. What each restriction tier really blocks</h2>
+
+      <p>Meta publishes the tier names. They don't publish what each one does at the field level. Here is what actually happens to your data at each tier, based on what survives in Events Manager, what the Conversions API test tool reports back, and what the Dataset Quality API returns after a blocked payload.</p>
+
+      <h3>Tier 1 &mdash; Core Setup</h3>
+
+      <p>Often described as the &ldquo;mild&rdquo; tier. It is not mild. Core Setup is the first indicator that classification has already happened; your dataset has already been labelled health, and these strips are the consequence.</p>
+
+      <p><strong>What gets stripped before ingestion:</strong></p>
+      <ul>
+        <li><code>event_source_url</code> &mdash; full URL removed. Not redacted. Removed. Landing page signal goes to zero.</li>
+        <li>URL parameters inside payload fields &mdash; UTMs survive in reporting but not in match or optimization.</li>
+        <li>Custom parameters that contain URL-like strings (including referrer chains you may have passed in <code>custom_data</code>).</li>
+      </ul>
+
+      <p><strong>What survives:</strong></p>
+      <ul>
+        <li>Identity fields: hashed <code>em</code>, <code>ph</code>, <code>external_id</code>, <code>fbp</code>, <code>fbc</code>. These are the match surface, and match still works at Tier 1.</li>
+        <li>Standard event names and their <code>value</code> / <code>currency</code> pair.</li>
+        <li>IP and user agent for browser events.</li>
+      </ul>
+
+      <p><strong>What this means for optimization:</strong> you still attribute conversions. You still retarget. Lookalikes still build. But the model has lost its richest context &mdash; page, path, content taxonomy &mdash; so CPMs rise and prospecting weakens inside two to three weeks. Core Setup is survivable. It is not neutral.</p>
+
+      <h3>Tier 2 &mdash; Standard Event Restrictions</h3>
+
+      <p>The middle tier is where brands panic. Standard events get rejected at ingestion for specific event types. In practice this means <code>Purchase</code>, <code>Lead</code>, <code>CompleteRegistration</code>, <code>Subscribe</code>, and <code>StartTrial</code> lose their pre-classified meaning. They are still accepted as payloads. They are not used for campaign optimization at the standard-event layer.</p>
+
+      <p><strong>What blocks:</strong></p>
+      <ul>
+        <li>Optimization against the restricted standard events for health-adjacent campaigns.</li>
+        <li>Dynamic product ads tied to those standard events.</li>
+        <li>Conversion lift studies and attribution reports at the standard-event granularity.</li>
+      </ul>
+
+      <p><strong>What still works &mdash; and this is the part nobody tells you:</strong></p>
+      <ul>
+        <li>Custom events with identical payloads. Rename <code>Purchase</code> to <code>order_complete</code> and the event ingests, attributes, and optimizes. You lose the pre-classified value meaning; you keep the signal.</li>
+        <li>Custom conversions built on top of those custom events. This is the path most health brands end up on without understanding why.</li>
+        <li>Value optimization via custom events &mdash; provided the payload is clean of condition keywords.</li>
+      </ul>
+
+      <p>Tier 2 is not a ban. It is a forced migration from standard to custom event taxonomy. The brands that survive it are the ones that read the tier for what it is and rebuild the event layer; the ones that keep firing <code>Purchase</code> into the void lose months.</p>
+
+      <h3>Tier 3 &mdash; Full Restrictions</h3>
+
+      <p>The terminal tier. The dataset is flagged and demoted. This is where the folklore breaks down, because Tier 3 is not a kill switch &mdash; it is a severe optimization penalty with specific carve-outs.</p>
+
+      <p><strong>What blocks:</strong></p>
+      <ul>
+        <li>All standard-event optimization for the flagged domain.</li>
+        <li>Dynamic product ads entirely.</li>
+        <li>Conversion-objective campaigns pointed at that domain &mdash; they will serve at a fraction of prior scale.</li>
+        <li>Advantage+ Shopping for the flagged domain.</li>
+      </ul>
+
+      <p><strong>What surprisingly survives:</strong></p>
+      <ul>
+        <li>Offline conversions uploaded through the same business, provided they reference a different, clean domain.</li>
+        <li>Brand-awareness and reach objectives &mdash; they don't rely on the conversion pipeline.</li>
+        <li>Lead Ads (the on-Meta instant form variant), because the conversion is on Meta property, not the flagged domain.</li>
+        <li>Another clean domain in the same business, if it is not a mirror of the flagged one.</li>
+      </ul>
+
+      <p>Tier 3 is where most agencies quietly recommend a new domain. What they don't tell you: the same Business Manager can host the new domain without penalty if the content, catalog, and pixel are genuinely different. The restriction is domain-scoped. History is account-informed but not account-terminal.</p>
+
+      <h2 id="matters">3. What matters. What doesn't. A binary cheat sheet.</h2>
+
+      <p>The single most expensive thing about this vertical is the amount of work done on inputs that don't move the needle. Here's the honest split.</p>
+
+      <h3>Matters</h3>
+      <ul>
+        <li><strong>Landing page copy.</strong> Condition names, prescription drug names, diagnostic language. Rewrite before anything else.</li>
+        <li><strong>URL path segments.</strong> <code>/pcos</code>, <code>/diabetes</code>, <code>/weight-loss</code> &mdash; route to neutral slugs or the page-path signal keeps firing.</li>
+        <li><strong>Product titles and catalog feed.</strong> Every row. Including the ones you stopped running ads against.</li>
+        <li><strong>Meta <code>title</code> and <code>description</code> tags.</strong> The classifier reads the head of the document.</li>
+        <li><strong>Pixel <code>content_name</code>, <code>content_category</code>, <code>content_ids</code>.</strong> Clean or remove.</li>
+        <li><strong>Event taxonomy decision: standard vs custom.</strong> At Tier 2+, custom wins.</li>
+        <li><strong>Hashing discipline.</strong> <code>em</code>, <code>ph</code>, <code>external_id</code> hashed; <code>fbp</code>, <code>fbc</code> never hashed. Get this wrong and match fails silently.</li>
+        <li><strong>Event Match Quality.</strong> Below 6.0 and your signal is noise. Above 8.0 and the classifier has enough to read you cleanly either way.</li>
+        <li><strong>Deduplication via <code>event_id</code>.</strong> Pixel and CAPI firing the same event without a shared <code>event_id</code> is double-counting, not redundancy.</li>
+        <li><strong>Business verification and domain verification status.</strong> Unverified domains get classified harder and recover slower.</li>
+      </ul>
+
+      <h3>Doesn't matter</h3>
+      <ul>
+        <li>CAPI vendor choice. Stape, custom server, GTM server-side, native Shopify CAPI &mdash; all indistinguishable to the classifier.</li>
+        <li>Server location, CDN, TLS cipher suite. None of it is read.</li>
+        <li>Domain TLD. <code>.com</code>, <code>.co</code>, <code>.health</code> are treated identically on the content signal.</li>
+        <li>Number of custom parameters, beyond a sane handful. Twenty custom params don't outperform five well-chosen ones.</li>
+        <li>Ad creative copy &mdash; for <em>data restriction purposes</em>. Creative is reviewed separately by ad review. Two different pipelines. Clean creative does not un-restrict a dataset.</li>
+        <li>Campaign structure, budget, bidding strategy. The restriction is upstream of the auction.</li>
+        <li>Which browser your customers use.</li>
+        <li>Whether you have a Meta rep. Reps cannot lift a data restriction. The lift, when it happens, is algorithmic.</li>
+      </ul>
+
+      <p>If you are being charged for work from the second list, you are paying for motion, not progress.</p>
+
+      <h2 id="scenarios">4. &ldquo;What happens if&hellip;&rdquo; &mdash; the scenarios nobody answers</h2>
+
+      <p>These are the exact questions I get in Slack DMs from founders, answered at the mechanism level rather than the policy level.</p>
+
+      <h3>What happens if I switch my CAPI vendor mid-flight?</h3>
+      <p>Nothing, from a restriction standpoint. The classifier does not read the sender. You will see a temporary dip in Event Match Quality while the new vendor's payload shape stabilizes &mdash; usually 48 to 72 hours. If the restriction was already in place, switching vendors will not lift it. If it wasn't, switching won't cause it.</p>
+
+      <h3>What happens if I migrate to a new domain with the same Business Manager?</h3>
+      <p>The new domain starts with a clean content score but an informed account history. Classification on the new domain typically takes 10&ndash;21 days if the content is genuinely distinct. If the new domain is a reskinned clone &mdash; same product names, same category taxonomy &mdash; the classifier catches it faster than the first time, not slower. Account history accelerates recognition of known content patterns.</p>
+
+      <h3>What happens if I remove all condition keywords from my site but leave the catalog?</h3>
+      <p>You close the front door and leave the side door open. The catalog feed is a first-class input. Brands do this constantly &mdash; clean the pages, forget the feed &mdash; and then wonder why nothing changes after six weeks.</p>
+
+      <h3>What happens if I pause all ads for 30 days?</h3>
+      <p>Nothing useful. Restriction is on the dataset, not the campaign. The dataset continues receiving organic traffic events while ads are paused, and classification holds. Pausing is not a cooldown.</p>
+
+      <h3>What happens if I send a clean payload from CAPI while the pixel still fires dirty data?</h3>
+      <p>The dirty pixel wins. Both fire into the same dataset. The classifier reads the union. A clean CAPI does not cancel a dirty pixel; it dilutes it at best.</p>
+
+      <h3>What happens if my customer's browser blocks the pixel?</h3>
+      <p>CAPI carries the event. This is the expected path for about 30&ndash;40% of health-brand traffic on iOS. It is also why CAPI-only setups sometimes look <em>healthier</em> than pixel+CAPI &mdash; not because CAPI is cleaner, but because the pixel was leaking condition context the CAPI payload doesn't contain.</p>
+
+      <h3>What happens if I run Lead Ads instead of website conversions?</h3>
+      <p>The conversion happens on Meta's property. Your domain's classification still exists, but the optimization path sidesteps it. Lead volume is often the fastest route back to performance for Tier 3 brands, at the cost of CRM integration complexity.</p>
+
+      <h3>What happens if I appeal the restriction?</h3>
+      <p>The appeal is read by the same system that classified you, against the same inputs. If the inputs have not changed, the appeal outcome will not change. Appeals are useful only after material site, catalog, and event changes have been live long enough to be re-classified &mdash; roughly 14 days.</p>
+
+      <h3>What happens if I use Limited Data Use mode?</h3>
+      <p>LDU is a privacy control for regulated US states. It is not a health-restriction mitigation. Turning it on does not de-classify a dataset. Turning it off does not cause classification. It is orthogonal, and treating it as a lever here wastes engineering time.</p>
+
+      <h3>What happens if I hash <code>fbp</code> and <code>fbc</code> by accident?</h3>
+      <p>Match fails silently. The events ingest. They don't match. Your EMQ drops without an error message. I have seen this exact mistake cost a brand six weeks of investigation because nothing in the UI flags it.</p>
+
+      <h3>What happens if I rename my standard event to a custom name but keep <code>event_name</code> strings that contain condition words?</h3>
+      <p>You moved one signal and kept another. The classifier reads event names. <code>pcos_purchase_complete</code> is worse than <code>Purchase</code> was. Rename to neutral verbs: <code>order_complete</code>, <code>checkout_done</code>, <code>signup_finished</code>.</p>
+
+      <h3>What happens after the January 12, 2026 attribution changes for a restricted dataset?</h3>
+      <p>The 7-day view and 28-day view windows are gone. Restricted datasets lose their richer attribution alongside everyone else, but the relative disadvantage sharpens &mdash; a restricted brand is now competing on 1-day-click and 7-day-click only, against unrestricted brands with the same windows. The restriction penalty compounds with the window compression. Plan for it.</p>
+
+      <h2 id="timing">5. Timing and aging &mdash; the mysteries no doc explains</h2>
+
+      <p>Every brand asks the same three timing questions and gets three non-answers from support. Here are the observed windows.</p>
+
+      <h3>How long does classification take on a fresh dataset?</h3>
+      <p>Between 4 and 14 days from first meaningful event volume, inside a Business Manager with prior health-vertical history. 14 to 45 days in a fresh Business Manager with no history. The range is wide because it depends on how fast the dataset crosses the classifier's volume threshold for confident labelling &mdash; roughly a few hundred events per day sustained.</p>
+
+      <h3>Does a restriction expire?</h3>
+      <p>Not on a clock. It lifts when the inputs re-classify clean. If your site, catalog, and event payloads all read as non-health for 14+ days of sustained traffic, the classifier re-evaluates. The re-evaluation is not a scheduled job; it runs against datasets that have shown enough signal change to warrant a fresh look. Sit on stale changes for 30 days and the re-evaluation may not have run yet.</p>
+
+      <h3>How old does a Business Manager need to be?</h3>
+      <p>Age is less important than history. A 6-year-old BM with a clean track record behaves like a fresh BM. A 3-month-old BM that has never triggered a restriction is in better standing than a 5-year-old BM with two prior Tier 3 domains. The system weighs behavior, not birthday.</p>
+
+      <h3>When do changes show up?</h3>
+      <p>Site copy changes: propagate to classification within 48&ndash;96 hours of being indexed. Catalog feed changes: 24&ndash;72 hours after the next feed fetch. Event payload changes: immediate on the ingestion path, but take 7&ndash;14 days to shift the aggregate classification score enough to matter.</p>
+
+      <h3>What about the Advertiser Verification deadline?</h3>
+      <p>Meta's Advertiser Verification (effective March 27, 2026) adds an identity layer on top of all of this. It does not replace or reset health classification. A verified advertiser running a classified health domain stays classified. The two systems run in parallel.</p>
+
+      <h2 id="support">6. The support black hole &mdash; and the three surfaces that actually tell you the truth</h2>
+
+      <p>Meta support cannot lift a health classification. That is not a policy failure; it is an architectural one. Support agents do not have a tool that says &ldquo;un-restrict this dataset.&rdquo; The restriction is an output of the classifier, and the classifier takes inputs, not tickets.</p>
+
+      <p>What support <em>can</em> do: confirm a dataset is restricted, confirm which tier, and escalate obvious misclassifications (a shoe brand accidentally flagged health). What support cannot do: tell you what triggered it, how to fix it, or how long until it lifts.</p>
+
+      <p>If you are paying a rep to pursue a support path, you are paying for a ceremony. The three surfaces that actually tell you what is happening:</p>
+
+      <ol>
+        <li><strong>Events Manager &rarr; Dataset &rarr; Diagnostics tab.</strong> This is where restriction status, missing fields, and match quality degradation actually surface. The banner language is deliberately vague but the field-level diagnostics are honest.</li>
+        <li><strong>The Conversions API test tool.</strong> Send a real payload. Read the response. It will tell you which fields were accepted, which were stripped, and which were rejected. This is ground truth &mdash; not the docs, not the rep.</li>
+        <li><strong>The Dataset Quality API.</strong> Programmatic access to match rate, event coverage, and parameter quality over time. A declining curve without a corresponding campaign change is the earliest detectable signal of classification tightening. Most brands never query it. You should.</li>
+      </ol>
+
+      <p>Between those three, everything the classifier is doing becomes visible enough to act on. Nothing outside them &mdash; not support tickets, not Slack groups, not Twitter, not the agency deck &mdash; will tell you more than those three surfaces already do.</p>
+
+      <hr />
+
+      <p>That is the inside of the box. If you only read one section, read section three &mdash; the cheat sheet &mdash; and stop paying for work on the right-hand column. If you read all six, you now know more about the mechanism than 95% of people selling solutions for it.</p>
+
+    <p class="endnote">If any observation here contradicts what you're seeing in your account, I want to know. The only way a reference like this stays accurate is if it gets tested in other people's pipelines.</p>
+  </article>
+</main>
+
+<footer class="foot">
+  <span>&copy; <span id="year"></span> Akhlas</span>
+  <span>Built plain. No frameworks.</span>
+</footer>
+
+<script>document.getElementById('year').textContent=new Date().getFullYear()</script>
+</body>
+</html>
